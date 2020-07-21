@@ -1,0 +1,43 @@
+{% extends 'home/base.html' %}
+{% block content %}
+    <div>
+        {% if inactive__count %}
+        <h4>Your devices with waiting requests</h4>
+        <!-- o.plan__count -->
+        <div class="row">
+            {% for o in inactive__count %}
+            <div class="col">
+                <a href="{% url 'requests' o.id  %}" class="btn btn-outline-secondary">
+                    {{ o }}
+                    <span class="badge badge-pill badge-info">{{ o.inactive__count }}</span>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <h4>Your Devices List</h4>
+        {% if object_list %}
+            <div class="row">
+            {% for o in object_list %}
+            <div class="show-on-hover-container btn full_wide my_card">
+                <a href="{% url 'requests' o.id  %}" class="btn btn-secondary">
+                    {{ o }}
+                </a>
+                <div class="show-on-hover">
+                    Id :{{ o.id }}<br />
+                    {{ o.address.village }},
+                    {{ o.address.village.town }},
+                    {{ o.address.village.town.state }}
+                </div>
+            </div>
+            {% endfor %}
+            </div>
+        {% else %}
+            You don't own any device.
+        {% endif %}
+        <div style="padding-top: 10%;">
+        <small>Want a device? Buy a new device by <a href="{% url 'about' %}">contacting us</a> </small>
+        </div>
+    </div>
+
+{% endblock %}

@@ -1,0 +1,4 @@
+oota/db.sqlite3
+*/__pycache__/*
+*migrations/*
+oota/home/static/home/bs

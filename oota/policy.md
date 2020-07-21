@@ -1,0 +1,2 @@
+Plan :
+Consumer requests owner for a plan for some number of liters. Owner gives permission to user i.e activates plan. Consumer gets water till the limit is reached. When consumer requests for water, active status of plan is checked and limit is checked against used, if used < limit, request is sent to device. Otherwise, redirected to payments page for new plan request.

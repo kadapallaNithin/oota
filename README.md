@@ -1,2 +1,3 @@
-# oota
-Django website for oota
+## oota django code
+
+Django website for oota.
