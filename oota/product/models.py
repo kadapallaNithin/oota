@@ -29,6 +29,10 @@ class Rate(models.Model):
 class ProductIPAddress(models.Model):
     product = models.ForeignKey(Product,on_delete=models.CASCADE)
     ip = models.CharField(max_length=16)#GenericIPAddressField()
-    product_key = models.CharField(max_length=128)
-    server_key = models.CharField(max_length=128,default="nithinPk")
+#    product_key = models.CharField(max_length=128)
+    time = models.DateTimeField(auto_now=True)
+
+class ServerKey(models.Model):
+    product = models.ForeignKey(Product,on_delete=models.CASCADE)
+    key = models.CharField(max_length=128,default="nithinPk")
     time = models.DateTimeField(auto_now=True)

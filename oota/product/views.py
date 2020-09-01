@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import CreateView, DetailView, ListView
 from django.db.models import Count
-from .models import Product, Rate, ProductIPAddress
+from .models import Product, Rate, ProductIPAddress, ServerKey
 #from payments.models import Plan
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import User
@@ -10,7 +10,8 @@ from django.db import IntegrityError
 #from django import forms
 from json import JSONEncoder
 from django.contrib import messages
-
+import secrets
+import string
 class ProductListView(ListView):
     model = Product
 
@@ -65,7 +66,7 @@ class RateListView(ListView):
 class RateDetailView(DetailView):
     model = Rate
 
-# def update_product_ip(request):
+# def wrapper(request):
 #     response = dict()
 #     if request.method == "GET":
 #         g = request.GET
@@ -80,36 +81,126 @@ class RateDetailView(DetailView):
 #     e = JSONEncoder()
 #     return HttpResponse(e.encode(response))
 
+# def prod_ip_dev(request):
+#     wrapper(request)
+
+# def product_ip_not_using(request):
+#     response = dict()
+#     if request.method == "GET":
+#         g = request.GET
+#         if 'prod' in g and 'ip' in g and 'key' in g :
+#             try:
+#                 prod_ips = ProductIPAddress.objects.filter(product_id=g['prod']).order_by('-time')
+#                 if len(prod_ips) >= 1:
+#                     if len(prod_ips) > 100:#delete history
+#                         pass
+#                     prod_ip = prod_ips.first()
+#                     if prod_ip.server_key == g['key']:
+#                         serv_key = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(128))
+#                         #serv_key = "nithinPk"
+#                         new_prod_ip = ProductIPAddress.objects.create(product_id=g['prod'],ip=g['ip'],server_key=serv_key)
+#                         new_prod_ip.save()
+#                         response = {"key":serv_key,"password":"12345678","ssid":"kadapalla"}
+#                         #response['code'] = 200 #ok
+#                     elif 'reset' in g and g['reset'] == 1:# incorrectly stored api_key due to interrupted reset or powerloss
+#                         if len(prod_ip.server_key) == len(g['key']):
+#                             i = 0
+#                             while i < len(prod_ip.server_key):
+#                                 if prod_ip.server_key[i] != g['key'][i]:
+#                                     break
+#                                 i += 1
+#                             prod_ip = prod_ips[1]
+#                             while i < len(prod_ip.server_key):
+#                                 if prod_ip.server_key[i] != g['key'][i]:
+#                                     break
+#                                 i += 1
+#                             if i == len(prod_ip.server_key) - 1:
+#                                 serv_key = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(128))
+#                                 new_prod_ip = ProductIPAddress.objects.create(product_id=g['prod'],ip=g['ip'],server_key=serv_key)
+#                                 new_prod_ip.save()
+#                                 response = {"server_key":serv_key,"password":"12345678","ssid":"kadapalla"}
+#                             else:
+#                                 response['code'] = 403
+#                                 response['error'] = "Not authenticated"
+#                     else:
+#                         response['code'] = 403
+#                         response['error'] = "Not authenticated"
+#                 else:
+#                     response['code'] = 201
+#                     response["error"] = 'not initialized properly'# i.e you don't have a server_key that is sent by server or product may not be present
+#             except IntegrityError:
+#                 response['code'] = 202
+#                 response['error'] = "IntegriryError"
+#             except ValueError:
+#                 response['code'] = 203
+#                 response['error'] = "ValueError" #may be product_id is not provided
+#             except OverflowError:
+#                 response['code'] = 204
+#                 response['error'] = "OverflowError"
+#         else:
+#             response['code'] = 100
+#             response['error'] = "Some data is missing"
+#     else:
+#         response['code'] = 101
+#         response["error"] = "Not a get request"
+#     e = JSONEncoder()
+#     return HttpResponse(e.encode(response))#'{"api_key":"'+api_key+'","ssid":"kadapalla","password":"12345678"}'
+
+
+def product_ip_func(g,**kwargs):
+    if 'ip' in g and 'key' in kwargs:
+        key = kwargs['key']
+        new_key = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(128))
+        ServerKey.objects.create(product=key.product,key=new_key)
+        new_prod_ip = ProductIPAddress.objects.create(product_id=g['id'],ip=g['ip'])
+        #response['code'] = 200 #ok
+        return {"server_key":new_key,"password":"12345678","ssid":"kadapalla"}
+    return {"error":"IP is is not provided"}
 def product_ip(request):
+    return secure_request(request,product_ip_func)
+
+
+def secure_request(request,func):
     response = dict()
     if request.method == "GET":
         g = request.GET
-        if 'prod' in g and 'ip' in g and 'key' in g :
+        if 'id' in g and 'key' in g :
             try:
-                prod_ips = ProductIPAddress.objects.filter(product_id=g['prod'])
-                if len(prod_ips) >= 1:
-                    if len(prod_ips) > 100:#delete history
-                        pass
-                    prod_ip = prod_ips.last()
-                    if prod_ip.server_key == g['key']:
-                        api_key = "nithin" # pending generete hash
-                        serv_key = "nithinPk"#pending generate hash
-                        new_prod_ip = ProductIPAddress.objects.create(product_id=g['prod'],ip=g['ip'],product_key=api_key,server_key=serv_key)
-                        new_prod_ip.save()
-                        response = {"api_key":api_key,"ssid":"kadapalla","password":"12345678"}
-                        response['code'] = 200 #ok
+                server_keys = ServerKey.objects.order_by('-id')
+                key = server_keys[0]
+#                key.key = "nithinPk"#should be removed
+                
+                if key.key == g['key']:
+                    response = func(g,key=key)
+                elif 'is_reset' in g and g['is_reset'] == '1':# incorrectly stored api_key due to interrupted reset or powerloss
+                    i = 0
+                    if len(key.key) == len(g['key']):
+                        while i < len(key.key):
+                            if key.key[i] != g['key'][i]:
+                                break
+                            i += 1
+                        key = server_keys[1]
+                        while i < len(key.key):
+                            if key.key[i] != g['key'][i]:
+                                break
+                            i += 1
+                    if i == len(key.key):
+                        response = func(g,key=key)
                     else:
                         response['code'] = 403
-                        response['error'] = "Not authenticated"
+                        response['error'] = "Not authenticated"+str(i)+" "+str(len(g['key']))
                 else:
-                    response['code'] = 201
-                    response["error"] = 'not initialized properly'# i.e you don't have a server_key that is sent by server or product may not be present
+                    response['code'] = 403
+                    response['error'] = "Not Authenticated"
+                # els:
+                #     response['code'] = 201
+                #     response["error"] = 'not initialized properly'# i.e you don't have a server_key that is sent by server or product may not be present
             except IntegrityError:
                 response['code'] = 202
                 response['error'] = "IntegriryError"
             except ValueError:
                 response['code'] = 203
-                response['error'] = "ValueError" #may be product_id is not provided
+                response['error'] = "ValueError" #may be product_id is not provided i.e null
             except OverflowError:
                 response['code'] = 204
                 response['error'] = "OverflowError"

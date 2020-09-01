@@ -1,5 +1,5 @@
 oota/db.sqlite3
 */__pycache__/*
-*/migrations/*
 oota/media/profile_pics/*
 oota/home/static/home/bs
+*.pyc

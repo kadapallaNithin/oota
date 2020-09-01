@@ -15,7 +15,10 @@
   .bg-steel {
     background-color: #5f788a;
   }
-  
+  .bg-cloudblue{
+    background-color:  rgb(17, 172, 233);
+
+  }  
   .site-header .navbar-nav .nav-link {
     color: #cbd5db;
   }

@@ -2,12 +2,12 @@
 {% load crispy_forms_tags %}
 {% block content %}
 <div >
-    <h4 style="text-align: center;"> Sign{{ sign }}</h4>
+    <h4 style="text-align: center;"> Signup</h4>
     <div class='pl-4 mr-4'>
         <form method="POST">
             {% csrf_token %}
             {{ form | crispy }}
-            <input type="submit"  value="Sign{{ sign }}" />
+            <input type="submit"  value="Signup" />
         </form>
     </div>
 </div>

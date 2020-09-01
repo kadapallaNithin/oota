@@ -1,5 +1,5 @@
 from django.shortcuts import render,redirect, get_object_or_404, reverse
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -9,11 +9,14 @@ from .models import PostPaid, WaterPostPaidTransaction
 from payments.models import Plan, WaterTransaction
 from product.models import Product, ProductIPAddress
 from product import views as product_views
+from product.views import secure_request
+import secrets
+import string
 
+# if user0 gets key but device is offline. user0 goes. user1 gets same key device is online.
 class WaterTransactionCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = WaterTransaction
     fields = ['request']
-
     def test_func(self):
         plan = get_object_or_404(Plan,id=self.kwargs.get('plan_id'))
         return plan.user == self.request.user
@@ -31,29 +34,64 @@ class WaterTransactionCreateView(LoginRequiredMixin, UserPassesTestMixin, Create
         #    return HttpResponseRedirect(reverse('water_transaction',args=(plan.id,)))
         else:
             #self.kwargs['ip_address'] = product_views.get_product_ip(self.request, plan.product_id)
-            plan.used += form.instance.request
-            plan.save()
+            # # # handled by signals
+            # # transactions = WaterTransaction.objects.filter(plan=plan).order_by('id')
+            # # if len(transactions) > 0:
+            # #     last_transaction = transactions.last()
+            # #     refund = last_transaction.request - last_transaction.dispensed
+            # #     if refund > 0 :
+            # #         plan.used -= refund
+            # # plan.used += form.instance.request
+            # # plan.save()
+            form.instance.key = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(128))
+            form.instance.cash_bytes = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(form.instance.request))
             return super().form_valid(form)
         return HttpResponseRedirect(reverse('water_transaction',args=(plan.id,)))
 
-        def get_context_data(self):
-            context = super().get_context_data()
-            context['object'] = get_object_or_404(Plan,id=self.kwargs.get('plan_id'))
-            return context
+    def get_context_data(self):
+        context = super().get_context_data()
+ #       context['plan'] = get_object_or_404(Plan,id=self.kwargs.get('plan_id'))
+        context['last_txn'] = WaterTransaction.objects.filter(plan_id=self.kwargs.get('plan_id')).last()
+        return context
+
 
 @login_required
 def dispense(request,transaction_id):
     txn = get_object_or_404(WaterTransaction,id=transaction_id)
-    product = txn.plan.product
-    link_data = ProductIPAddress.objects.filter(product_id=product.id).order_by('id')[0]
-    #context = {"link_data":link_data}
-    return HttpResponseRedirect(f"http://{ link_data.ip }/turn?key={ link_data.product_key }") #render(request,'payments/dispense.html',context)
+    ip = ProductIPAddress.objects.filter(product_id=txn.plan.product.id).last()#order_by('-id')[0]
+    key = WaterTransaction.objects.filter(plan__product_id=txn.plan.product.id,not_finished=False).last()
+    return render(request,'payments/dispense.html',{"ip":ip.ip,"key":key.key,"txn":txn})
+# @login_required
+# def finish(request,transaction_id):
+#     txn = get_object_or_404(WaterTransaction, id=transaction_id)
+
+
+# product side
+def store_sensor_values(request):#not currently
+    # txn_id, server_key, prod_id == txn.prod_id 
+    return HttpResponse('hi')
+
+def finish_txn_func(g,**kwargs):
+    if 'txn' in g and 'dispensed' in g:
+        txn = get_object_or_404(WaterTransaction,id=g['txn'])
+        if txn.dispensed == 0:
+            txn.dispensed = int(g['dispensed'])
+            txn.save()
+            return {"code":200,"key":key,"dispensed":txn.dispensed,"txn":txn.__str__()}
+        else:
+            return {"code":1,"error":"dispensed was not 0"}
+    return {"code":1,"error":"some data missing or unknown error"}
+
+def finish_txn(request):
+    return secure_request(request,finish_txn_func)
+
+def cash(request):
+    return HttpResponse('nnnnnnnn')
 
 class WaterTransactionListView(LoginRequiredMixin, ListView):
     model = WaterTransaction
-    ordering = ['-started_on']
     def get_queryset(self):
-        return WaterTransaction.objects.filter(plan__user=self.request.user)
+        return WaterTransaction.objects.filter(plan__user=self.request.user).order_by('-started_on')
 
 class PlanCreateView(LoginRequiredMixin,CreateView):
     model = Plan
@@ -162,7 +200,7 @@ class WaterPostPaidTransactionCreateView(CreateView):
     model = WaterPostPaidTransaction
     fields = ['num_liters']
 
-def water_dispensed_periodic(request):
+def water_dispensed_periodic_not_upto_date(request):
     if request.method == "GET":
         g = request.GET
         if 'key' in g  and '' in g and 'trans' in g :

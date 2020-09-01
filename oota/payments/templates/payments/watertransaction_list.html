@@ -22,6 +22,9 @@
             </td>
             <td> 
             {{ o.dispensed }}/{{ o.request }}
+            {% if o.not_finished %}
+            <a href="{% url 'dispense' o.id %}">Start or Refund</a>
+            {% endif %}
             </td>
             <td><span class="show-on-hover-container">{{ o.started_on.date }}<span class="show-on-hover">{{ o.started_on.time }}</span></span></td>
         </tr>

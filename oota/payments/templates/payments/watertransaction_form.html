@@ -7,11 +7,17 @@
     Consider power availablity.
 </p>
 <p>
-    Used : {{ object }}
+    {% if last_txn %}
+        Last transaction with this plan started on : {{ last_txn.started_on }}<br />
+    {% else %}
+        This is your first transaction with this plan.
+    {% endif %}
+    <small>Please refresh to get latest info.</small>
 </p>
 <form method="POST">
     {{ form | crispy }}
     {% csrf_token %}
+    
     <input type="submit" class="btn btn-success" value="Dispense" />
 
 </form>

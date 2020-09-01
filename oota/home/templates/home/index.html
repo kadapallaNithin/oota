@@ -33,7 +33,7 @@ tr:hover {
 
 {% endblock meta %}
 {% block content %}
-<form  method='POST'>	
+<!--form  method='POST'>	
 
 <div class="row">
     <!-- <div class='card-panel col s6 offset-s3'>
@@ -42,17 +42,19 @@ tr:hover {
             <tr><td>1 liter</td><td>2.3</td></tr>
             <tr><td>20 liter</td><td>40</td></tr>
         </table>
-    </div>     -->
-<!-- <div class="card-panel center col s6 offset-s3" style="background:skyblue;color:white;height:40px"> <b>Water is available</b></div> -->
+    </div>     ->
+<!-- <div class="card-panel center col s6 offset-s3" style="background:skyblue;color:white;height:40px"> <b>Water is available</b></div> ->
     <input name='prod' type='hidden' class='col offset-s3 s6' value=1 required=True />
         <input type='submit' class="col btn offset-s10 s2 blue" style="color:green;min-width:120px;" value='Dispsense'/>
-        <!--button id="fin" class="col btn s2 red" disabled onclick="">Finish</button-->
+        <!--button id="fin" class="col btn s2 red" disabled onclick="">Finish</button->
 </div>
-</form>
+</form-->
 {% if last_transaction %}
 <form method="POST">
 Do you want to repeat last transaction of 
 <input type="submit" class="btn btn-success" value="Yes, Repeat" />
 </form>
+{% else %}
+    Welcome {{ user }}
 {% endif %}
 {% endblock content %}

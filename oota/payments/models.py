@@ -28,7 +28,14 @@ class WaterTransaction(models.Model):
     plan = models.ForeignKey(Plan,on_delete=models.CASCADE)
     dispensed = models.IntegerField(default=0)#in ml
     request = models.IntegerField(default=0)#in ml
+    key = models.CharField(max_length=128)
+    not_finished = models.BooleanField(default=True)
+#    cash_bytes = models.TextField(max_length=256)#seems as a complication
     started_on = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.id}. {self.dispensed }/{ self.request },{self.plan}"
+
     def get_absolute_url(self):
         return reverse('dispense',args=(self.id,))
         #"http://"+ProductIPAddress.objects.filter(product_id=self.plan.product_id).last().ip
