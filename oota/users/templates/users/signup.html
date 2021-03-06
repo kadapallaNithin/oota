@@ -9,6 +9,12 @@
             {{ form | crispy }}
             <input type="submit"  value="Signup" />
         </form>
+        <div>
+            <small class="text-muted">
+                Already have an account? <a class="ml-2" href="{% url 'login' %}">Login</a><br />
+                Forgot password? <a class="ml-2" href="{% url 'password_reset' %}">Reset Password</a>
+            </small>
+        </div>
     </div>
 </div>
 {% endblock %}

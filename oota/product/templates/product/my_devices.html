@@ -19,15 +19,28 @@
         {% if object_list %}
             <div class="row">
             {% for o in object_list %}
-            <div class="show-on-hover-container btn full_wide my_card">
-                <a href="{% url 'requests' o.id  %}" class="btn btn-secondary">
-                    {{ o }}
-                </a>
-                <div class="show-on-hover">
-                    Id :{{ o.id }}<br />
-                    {{ o.address.village }},
-                    {{ o.address.village.town }},
-                    {{ o.address.village.town.state }}
+            <div class="show-on-hover-container m-1 col btn btn-outline-secondary">
+                <div>
+                    <div>
+                        <strong>
+                            <a href="{% url 'requests' o.id %}">
+                                {{ o }}
+                            </a>
+                        </strong>
+                    </div>
+                    <div class="card-body">
+                        <small>
+                            Id :{{ o.id }}<br />
+                            {{ o.address.village }}
+                        </small>
+                        <span class="disappear-on-hover">
+                            <span class="material-icons">expand_more</span>
+                        </span>
+                        <div class="show-on-hover">
+                            {{ o.address.village.town }},
+                            {{ o.address.village.town.state }}
+                        </div>    
+                    </div>
                 </div>
             </div>
             {% endfor %}

@@ -1,18 +1,19 @@
 from django.shortcuts import render,redirect, get_object_or_404, reverse
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import CreateView, UpdateView, ListView
 from django import forms
-from .models import PostPaid, WaterPostPaidTransaction
+from .models import PostPaid, WaterPostPaidTransaction, TxnState
 from payments.models import Plan, WaterTransaction
 from product.models import Product, ProductIPAddress
 from product import views as product_views
 from product.views import secure_request
+import requests
 import secrets
 import string
-
+import json
 # if user0 gets key but device is offline. user0 goes. user1 gets same key device is online.
 class WaterTransactionCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = WaterTransaction
@@ -30,6 +31,8 @@ class WaterTransactionCreateView(LoginRequiredMixin, UserPassesTestMixin, Create
         elif plan.remaining < form.instance.request:
         #    Invalid = True
             messages.warning(self.request,f'You can only request for { plan.limit } - { plan.used } = { plan.remaining } but requested for { form.instance.request }.')
+        elif form.instance.request == 0:
+            messages.warning(self.request,f'You are requesting for 0 Units. Request a valid amount.')
         #if Invalid:
         #    return HttpResponseRedirect(reverse('water_transaction',args=(plan.id,)))
         else:
@@ -55,31 +58,142 @@ class WaterTransactionCreateView(LoginRequiredMixin, UserPassesTestMixin, Create
         return context
 
 
-@login_required
-def dispense(request,transaction_id):
-    txn = get_object_or_404(WaterTransaction,id=transaction_id)
-    ip = ProductIPAddress.objects.filter(product_id=txn.plan.product.id).last()#order_by('-id')[0]
-    key = WaterTransaction.objects.filter(plan__product_id=txn.plan.product.id,not_finished=False).last()
-    return render(request,'payments/dispense.html',{"ip":ip.ip,"key":key.key,"txn":txn})
-# @login_required
-# def finish(request,transaction_id):
-#     txn = get_object_or_404(WaterTransaction, id=transaction_id)
+class WaterTransactionWaitingListView(ListView):
+    model = WaterTransaction
+    template_name = 'payments/waiting_list.html'
+    def get_queryset(self):
+        return WaterTransaction.objects.filter(plan__product_id=self.kwargs.get('product_id'),state=TxnState.in_queue).order_by('started_on')
 
+@login_required
+def dispense(request,txn):
+    ip = ProductIPAddress.objects.filter(product_id=txn.plan.product.id).last()#order_by('-id')[0]
+    key = txn.plan.product.productkey.key
+    #key = WaterTransaction.objects.filter(plan__product_id=txn.plan.product.id,state=TxnState.finished).last()
+    waiting = WaterTransaction.objects.filter(plan__product_id=txn.plan.product.id,state=TxnState.in_queue)
+    if len(waiting) > 0:
+        return render(request,'payments/waiting_list.html',context={"object_list":waiting,"txn":txn})
+    try:
+        # ensure transaction is not cancelled after sending request to MCU.
+        prev_state = txn.state
+        txn.state = TxnState.running
+        txn.save()
+        address = "http://"+ip.ip
+        url = address+"/turn/"
+        data = {"key":key,"req":txn.request,"txn":txn.id,"stop_key":txn.key, "json":1}
+        response = requests.post(url, data=data)
+        print("response content",response.content)
+        resp = json.JSONDecoder().decode(response.content.decode())
+        if ('req' in resp) and ('txn' in resp) and ('has_dispensed_for' in resp):
+            # check req, txn, has_dispensed_for
+            return render(request,'payments/finish.html',{"ip":ip.ip,"key":txn.key,"txn":txn})
+        elif 'rem' in resp:
+            txn.state = prev_state
+            txn.save()
+            messages.warning(request,"You have to wait. For running transaction, remaining : "+str(resp['rem'])+" units.")
+            return render(request,'payments/waiting_list.html',context={"object_list":waiting,"txn":txn})#render(request,'payments/offline.html',{"txn":txn,"waiting":1})
+        else:
+            txn.state = prev_state
+            txn.save()
+            messages.warning(request,"There was an error while processing.")
+            print(response.content)
+            print(data)
+        return HttpResponseRedirect(reverse('water_transaction_history'))
+    except requests.exceptions.ConnectionError:
+        txn.state = prev_state
+        txn.save()
+        return render(request,'payments/offline.html',{"txn":txn})
+
+@login_required
+def stop(request,txn):
+    ip = ProductIPAddress.objects.filter(product_id=txn.plan.product.id).last()#order_by('-id')[0]
+    try:
+        address = "http://"+ip.ip
+        url = address+"/finish/"
+        data = {"key":txn.key,"txn":txn.id, "json":1}
+        response = requests.post(url, data=data)
+#        print("response content",response.content)
+        resp = json.JSONDecoder().decode(response.content.decode())
+        if "finish" in resp:
+            if resp["finish"] == -1:
+                messages.warning(request, "Already finished!")
+            else:
+                units = resp["finish"]/txn.plan.product.count_per_unit
+                if units - txn.request > 0:
+                    print(resp["finish"]/txn.plan.product.count_per_unit - txn.request)
+                messages.success(request, "Dispsensed "+str(units) +" units of water.")
+        else:
+            messages.warning(request, "Either transaction has already finished or stopped due to power cut.")
+        return HttpResponseRedirect(reverse('water_transaction_history'))
+    except requests.exceptions.ConnectionError:
+        messages.warning(request, "Device is offline. Try again when it comes back online.")
+    return HttpResponseRedirect(reverse('water_transaction_history'))#render(request,'payments/offline.html',{"txn":txn})
+
+@login_required
+def transaction_state_chage(request,to,transaction_id):
+    txn = get_object_or_404(WaterTransaction, id=transaction_id)
+    if txn.state == TxnState.finished:
+        messages.warning(request,f"The transaction with id { txn.id } has already finished or cancelled!")
+        return HttpResponseRedirect(reverse('water_transaction_history'))
+    user = request.user
+    if user.is_authenticated and txn.plan.user == user:
+        if to == "dispense":
+            return dispense(request,txn)
+        elif to == "wait_in_queue":
+            return wait_in_queue(request,txn)
+        elif to == "stop":
+            return stop(request, txn)
+        elif to == "cancel":
+            return cancel_transaction(request, txn)
+    raise Http404("You can't access this transaction!")
+
+@login_required # access via transaction state change
+def wait_in_queue(request, txn):
+    if txn.state == TxnState.requested:
+        txn.state = TxnState.in_queue
+        txn.save()
+        messages.success(request,f'The transaction with id { txn.id } is put in queue.')
+    elif txn.state == TxnState.in_queue:
+        messages.warning(request,"The transaction is already in queue")
+    elif txn.state == TxnState.running:
+        messages.warning(request,"The transaction is already running")
+        pass # redirect
+    else:
+        messages.success(request,"Thank you")
+        messages.warning(request,"The transaction finished!")
+        return HttpResponseRedirect(reverse('home'))
+    return HttpResponseRedirect(reverse('waiting_list',args=(txn.plan.product.id,))) #render(request,'payments/queue.html',{"txn":txn})
+
+@login_required # access via transaction state change
+def cancel_transaction(request,txn):
+    if txn.state == TxnState.in_queue or txn.state == TxnState.requested:
+        txn.state = TxnState.finished
+        # txn.dispensed = 0 # it's default
+        txn.save()
+        messages.success(request,f'The transaction with id { txn.id } is cancelled.')
+    else:
+        messages.warning(request,f"The transaction with id { txn.id } is under progress. You can't cancel it. But you can stop it.")
+    return HttpResponseRedirect(reverse('water_transaction_history'))
 
 # product side
-def store_sensor_values(request):#not currently
+def store_sensor_values(request):#not currently if implementing, see in finsh_txn_func txn.dispensed == 0 which assumes this is not implemented 
     # txn_id, server_key, prod_id == txn.prod_id 
     return HttpResponse('hi')
 
 def finish_txn_func(g,**kwargs):
     if 'txn' in g and 'dispensed' in g:
         txn = get_object_or_404(WaterTransaction,id=g['txn'])
-        if txn.dispensed == 0:
-            txn.dispensed = int(g['dispensed'])
-            txn.save()
-            return {"code":200,"key":key,"dispensed":txn.dispensed,"txn":txn.__str__()}
-        else:
-            return {"code":1,"error":"dispensed was not 0"}
+        #if txn.dispensed == 0 : #
+        txn.dispensed = int(g['dispensed'])
+        txn.state = TxnState.finished
+        txn.save()
+        next_txns = WaterTransaction.objects.filter(plan__product_id=txn.plan.product.id,state=TxnState.in_queue).order_by('started_on')
+        if len(next_txns) > 0:
+            nxt_txn = next_txns.first()
+            nxt_txn.state = TxnState.running
+            return {"code":201,"req":nxt_txn.request, "txn":nxt_txn.id,"stop_key":nxt_txn.key} # ,"dispensed":txn.dispensed,"txn":txn.id
+        return {"code":200}
+ #       else:
+#            return {"code":1,"error":"dispensed was not 0"}
     return {"code":1,"error":"some data missing or unknown error"}
 
 def finish_txn(request):

@@ -1,8 +1,16 @@
 from django.contrib import admin
-from . import models
-# Register your models here.
-admin.site.register(models.Address)
-admin.site.register(models.Village)
-admin.site.register(models.Town)
-admin.site.register(models.State)
-admin.site.register(models.Country)
+from .models import Address, Village, Town, State, Country
+
+class VillageInline(admin.TabularInline):
+    model = Village
+    
+
+class TownAdmin(admin.ModelAdmin):
+    inlines = [
+        VillageInline,
+    ]
+admin.site.register(Address)
+admin.site.register(Village)
+admin.site.register(Town, TownAdmin)
+admin.site.register(State)
+admin.site.register(Country)

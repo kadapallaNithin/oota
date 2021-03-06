@@ -1,24 +1,28 @@
 {% extends 'home/base.html' %}
 {% block content %}
-    <div class="content-section">
-        <div>
-        {% if object_list %}
-        <!-- Product are :<br />  -->
+    <div>
+    {% if object_list %}
+    <!-- Product are :<br />  -->
         <h4>Request a plan for </h4>
         <div class="row">
             {% for product in object_list %}
-                <div class="show-on-hover-container btn my_card full_wide">
-                    <a href="{% url 'new_plan' product.id %}" class="btn btn-secondary ml-4">{{ product }} @ {{product.address}}, {{ product.address.village }}</a>
-                    <div class="show-on-hover">
-                        Id : {{ product.id }}
-                        {{ product.address.village.town.details }}
+            <!-- <div class="show-on-hover-container btn my_card full_wide"> -->
+                <div class="show-on-hover-container m-1 col btn btn-outline-secondary">
+                    <div>
+                        <div>
+                            <a href="{% url 'new_plan' product.id %}">{{ product }}</a>
+                        </div>
+                        <small>{{product.address}}, {{ product.address.village }}</small>
+                        <div class="show-on-hover">
+                            Id : {{ product.id }}
+                            {{ product.address.village.town.details }}
+                        </div>
                     </div>
                 </div>
             {% endfor %}
         </div>
-        {% else %}
-            Devices aren't there.
-        {% endif %}
-        </div>
+    {% else %}
+        Devices aren't there.
+    {% endif %}
     </div>
 {% endblock %}

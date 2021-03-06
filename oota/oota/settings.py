@@ -25,7 +25,7 @@ SECRET_KEY = '1%5_duvw^s*2k%!)gruws2kr)e0e1!@@i3oyt34f!m=fq-mp+i'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [os.environ.get('ALLOWED_HOSTS')]
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'payments.apps.PaymentsConfig',
     'crispy_forms',
+    'webpush',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -59,7 +60,7 @@ ROOT_URLCONF = 'oota.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -104,6 +105,11 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+WEBPUSH_SETTINGS = {
+   "VAPID_PUBLIC_KEY": "BNzMRDo2z60TfDc79eiMJeTAzGKw3VeAqvkVk3Yl6p7sI8Pw7DFuFNyMFPeQpxc7vndopp8g2o3ITQa_cKD03qM",
+   "VAPID_PRIVATE_KEY": "jFF12elxUsXStiXpKWlm4UaWqggFO34bwbEFJfrZ_H8",
+   "VAPID_ADMIN_EMAIL": os.environ.get('EMAIL_USER')
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.0/topics/i18n/
@@ -123,6 +129,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
 STATIC_URL = '/static/'
+# STATIC_ROOT = os.path.join(BASE_DIR,"home")
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR,"home"),
+]
 CRISPY_TEMPLATE_PACK =  'bootstrap4'
 
 MEDIA_ROOT = os.path.join(BASE_DIR,'media')

@@ -5,13 +5,46 @@ from .models import Product, Rate, ProductIPAddress, ServerKey
 #from payments.models import Plan
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import User
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseNotModified
+from django.http.response import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from webpush import send_user_notification
+from django.conf import settings
+
 from django.db import IntegrityError
 #from django import forms
 from json import JSONEncoder
+import json
 from django.contrib import messages
 import secrets
 import string
+
+@require_POST
+@csrf_exempt
+def send_push(request):
+    try:
+        body = request.body
+        data = json.loads(body)
+
+        if 'head' not in data or 'body' not in data or 'id' not in data:
+            return JsonResponse(status=400, data={"message": "Invalid data format"})
+
+        user_id = data['id']
+        user = get_object_or_404(User, pk=user_id)
+        payload = {'head': data['head'], 'body': data['body']}
+        send_user_notification(user=user, payload=payload, ttl=1000)
+
+        return JsonResponse(status=200, data={"message": "Web push successful"})
+    except TypeError:
+        return JsonResponse(status=500, data={"message": "An error occurred"})
+
+def webpush(request):
+    webpush_settings = getattr(settings,"WEBPUSH_SETTINGS",{})
+    vapid_key = webpush_settings.get("VAPID_PUBLIC_KEY")
+    user = request.user
+    return render(request,'product/webpush.html', {"user":user,"vapid_key":vapid_key})
+
 class ProductListView(ListView):
     model = Product
 
@@ -151,50 +184,65 @@ def product_ip_func(g,**kwargs):
     if 'ip' in g and 'key' in kwargs:
         key = kwargs['key']
         new_key = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(128))
-        ServerKey.objects.create(product=key.product,key=new_key)
+        product = get_object_or_404(Product,pk=g['id'])
+        product.productkey.key = new_key
+        product.productkey.save()
         new_prod_ip = ProductIPAddress.objects.create(product_id=g['id'],ip=g['ip'])
         #response['code'] = 200 #ok
-        return {"server_key":new_key,"password":"12345678","ssid":"kadapalla"}
+        return {"product_key":new_key }#,"password":"12345678","ssid":"kadapalla"}
     return {"error":"IP is is not provided"}
 def product_ip(request):
     return secure_request(request,product_ip_func)
-
-
+    
+def product_update(request,current_version):
+    data = "404"
+    try:
+        path_to_file = ""
+        data = open(path_to_file,'rb').read()
+        return HttpResponse(data)
+    except FileNotFoundError:
+        pass # 404
+    return HttpResponseNotModified()
 def secure_request(request,func):
     response = dict()
-    if request.method == "GET":
+    if request.method == "GET": # change to post
         g = request.GET
         if 'id' in g and 'key' in g :
             try:
-                server_keys = ServerKey.objects.order_by('-id')
-                key = server_keys[0]
-#                key.key = "nithinPk"#should be removed
+#                server_keys = ServerKey.objects.filter(product_id=g['id']).order_by('-id')
+#                key = server_keys[0]
+                key = ServerKey.objects.filter(product_id=g['id']).first()#get_object_or_404(ServerKey,pk=g['id'])
                 
                 if key.key == g['key']:
                     response = func(g,key=key)
-                elif 'is_reset' in g and g['is_reset'] == '1':# incorrectly stored api_key due to interrupted reset or powerloss
-                    i = 0
-                    if len(key.key) == len(g['key']):
-                        while i < len(key.key):
-                            if key.key[i] != g['key'][i]:
-                                break
-                            i += 1
-                        key = server_keys[1]
-                        while i < len(key.key):
-                            if key.key[i] != g['key'][i]:
-                                break
-                            i += 1
-                    if i == len(key.key):
-                        response = func(g,key=key)
-                    else:
-                        response['code'] = 403
-                        response['error'] = "Not authenticated"+str(i)+" "+str(len(g['key']))
+
+            # uncomment following if server_key reset concept is used
+                # elif 'is_reset' in g and g['is_reset'] == '1':# incorrectly stored api_key due to interrupted reset or powerloss
+                #     i = 0
+                #     print("in reset ",len(key.key),len(g['key']))
+                #     if len(key.key) == len(g['key']):
+                #         while i < len(key.key):
+                #             if key.key[i] != g['key'][i]:
+                #                 break
+                #             i += 1
+                #         key = server_keys[1]
+                #         while i < len(key.key):
+                #             if key.key[i] != g['key'][i]:
+                #                 break
+                #             i += 1
+                #     print("in reset i = ",i)
+                #     if i == len(key.key):
+                #         response = func(g,key=key)
+                #     else:
+                #         response['code'] = 403
+                #         response['error'] = "Not authenticated"+str(i)+" "+str(len(g['key']))+key.key
                 else:
+                    print(g['key'],key.key)
                     response['code'] = 403
                     response['error'] = "Not Authenticated"
                 # els:
-                #     response['code'] = 201
-                #     response["error"] = 'not initialized properly'# i.e you don't have a server_key that is sent by server or product may not be present
+                # #     response['code'] = 201
+                # #     response["error"] = 'not initialized properly'# i.e you don't have a server_key that is sent by server or product may not be present
             except IntegrityError:
                 response['code'] = 202
                 response['error'] = "IntegriryError"

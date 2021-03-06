@@ -2,6 +2,7 @@
     background: #fafafa;
     color: #333333;
     margin-top: 0.1rem;
+    justify-content: center;
   }
   
   h1, h2, h3, h4, h5, h6 {
@@ -11,13 +12,18 @@
   ul {
     margin: 0;
   }
-  
+  header{
+    margin-bottom: 5px;
+  }
   .bg-steel {
     background-color: #5f788a;
   }
+  .brand-name{
+    font-weight: bolder;
+  }
   .bg-cloudblue{
-    background-color:  rgb(17, 172, 233);
-
+    /* background-color:  rgb(17, 172, 233); */
+    background-image: linear-gradient(to bottom right, rgb(0, 110, 255),rgba(0,10,255,0.3));
   }  
   .site-header .navbar-nav .nav-link {
     color: #cbd5db;
@@ -102,6 +108,7 @@
   }
   h4{
     text-align: center;
+    color: blue;
   }
   .show-on-hover{
     display: none;
@@ -109,11 +116,17 @@
   .show-on-hover-container:hover .show-on-hover{
     display: block;
   }
+  .show-on-hover-container:hover .disappear-on-hover{
+    display: none;
+  }
   .center{
     text-align: center;
   }
   .right{
     text-align: right;
+  }
+  .fl-right{
+    float:right;
   }
   .full_wide{
     width: 100%;
@@ -131,4 +144,16 @@
   }
   a.my_card{
     padding-left: 100px;
+  }
+  span.material-icons{
+    position: relative;
+    top: 5px;
+    margin-right: 3px;
+  }
+  .txn{
+    text-align: center;
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+  }
+  .plan{
+    border-bottom: 1px solid rgba(0,0,0,0.12);
   }

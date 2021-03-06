@@ -9,10 +9,11 @@ urlpatterns = [
     path('rates/list/',RateListView.as_view(),name='rates-list'),
     path('rate/',RateCreateView.as_view(),name='rate'),
     path('rates/<int:pk>/',RateDetailView.as_view(),name='rates-detail'),
-
+    path('webpush/',views.webpush),
     # product side
     path('product_ip/',views.product_ip),
     #path('store/')
+    path('product/<int:current_version>/update/',views.product_update),
     
     #path('api/cash/',vie)#browser/get_full_cash
 ]

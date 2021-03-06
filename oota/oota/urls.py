@@ -21,10 +21,13 @@ from payments.views import PostPaidCreateView
 
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('',include('users.urls')),
+    path('sw.js', TemplateView.as_view(template_name='sw.js', content_type='application/x-javascript')),
+    path('webpush/',include('webpush.urls')),
     path('',home_views.index,name='home'),
     path(r'error/<str:message>/<str:redirect>/',home_views.error,name='error'),
     path('about/',home_views.about,name='about'),
@@ -36,3 +39,4 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL,document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL,document_root=settings.STATIC_ROOT)

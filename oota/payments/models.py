@@ -23,21 +23,29 @@ class Plan(models.Model):
         return self.limit - self.used
     def get_absolute_url(self):
         return reverse('my_plans')
+    def __str__(self):
+        return str(self.product)+' '+str(self.user)
+
+class TxnState:
+    requested = 0
+    in_queue = 1
+    running = 2
+    finished = 3 # or cancelled
 
 class WaterTransaction(models.Model):
     plan = models.ForeignKey(Plan,on_delete=models.CASCADE)
     dispensed = models.IntegerField(default=0)#in ml
     request = models.IntegerField(default=0)#in ml
-    key = models.CharField(max_length=128)
-    not_finished = models.BooleanField(default=True)
+    key = models.CharField(max_length=128) # used to stop txn
+    state = models.IntegerField(default=TxnState.requested)
 #    cash_bytes = models.TextField(max_length=256)#seems as a complication
     started_on = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.id}. {self.dispensed }/{ self.request },{self.plan}"
+        return f"{self.id}.[{self.state}] {self.dispensed }/{ self.request }, {self.plan}"
 
     def get_absolute_url(self):
-        return reverse('dispense',args=(self.id,))
+        return reverse('transaction',args=("dispense",self.id,))
         #"http://"+ProductIPAddress.objects.filter(product_id=self.plan.product_id).last().ip
 #         except AttributeError:
 #             error = "Sorry there was an error. Could not get IP address of the device. Please take a screenshot and contact us."
