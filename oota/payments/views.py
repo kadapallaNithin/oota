@@ -14,10 +14,17 @@ import requests
 import secrets
 import string
 import json
+from decimal import Decimal
 # if user0 gets key but device is offline. user0 goes. user1 gets same key device is online.
 class WaterTransactionCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = WaterTransaction
     fields = ['request']
+    def get_initial(self):
+        initial = super(WaterTransactionCreateView,self).get_initial()
+        last_txn = WaterTransaction.objects.filter(plan_id=self.kwargs.get('plan_id')).last()
+        if last_txn:
+            initial.update({'request':last_txn.request})
+        return initial
     def test_func(self):
         plan = get_object_or_404(Plan,id=self.kwargs.get('plan_id'))
         return plan.user == self.request.user
@@ -47,7 +54,7 @@ class WaterTransactionCreateView(LoginRequiredMixin, UserPassesTestMixin, Create
             # # plan.used += form.instance.request
             # # plan.save()
             form.instance.key = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(128))
-            form.instance.cash_bytes = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(form.instance.request))
+#            form.instance.cash_bytes = ''.join(secrets.choice(string.ascii_uppercase+string.digits + string.ascii_lowercase) for _ in range(form.instance.request))
             return super().form_valid(form)
         return HttpResponseRedirect(reverse('water_transaction',args=(plan.id,)))
 
@@ -61,6 +68,8 @@ class WaterTransactionCreateView(LoginRequiredMixin, UserPassesTestMixin, Create
 class WaterTransactionWaitingListView(ListView):
     model = WaterTransaction
     template_name = 'payments/waiting_list.html'
+    paginate_by = 10
+
     def get_queryset(self):
         return WaterTransaction.objects.filter(plan__product_id=self.kwargs.get('product_id'),state=TxnState.in_queue).order_by('started_on')
 
@@ -80,7 +89,7 @@ def dispense(request,txn):
         address = "http://"+ip.ip
         url = address+"/turn/"
         data = {"key":key,"req":txn.request,"txn":txn.id,"stop_key":txn.key, "json":1}
-        response = requests.post(url, data=data)
+        response = requests.post(url, data=data,timeout=(5,None))
         print("response content",response.content)
         resp = json.JSONDecoder().decode(response.content.decode())
         if ('req' in resp) and ('txn' in resp) and ('has_dispensed_for' in resp):
@@ -116,13 +125,17 @@ def stop(request,txn):
         if "finish" in resp:
             if resp["finish"] == -1:
                 messages.warning(request, "Already finished!")
+            elif resp["finish"] == 4294967295: # counter error
+                messages.warning(request, "Please contact us! Please note txnid = "+str(txn.id))
+                print("txn is not finished by mcu ",txn.id)
             else:
-                units = resp["finish"]/txn.plan.product.count_per_unit
+                # units = resp["finish"]/txn.plan.product.count_per_unit
+                units = resp["finish"]
                 if units - txn.request > 0:
-                    print(resp["finish"]/txn.plan.product.count_per_unit - txn.request)
+                    print(units - txn.request)
                 messages.success(request, "Dispsensed "+str(units) +" units of water.")
         else:
-            messages.warning(request, "Either transaction has already finished or stopped due to power cut.")
+            messages.warning(request, "The transaction has already finished")# Either or stopped due to power cut.
         return HttpResponseRedirect(reverse('water_transaction_history'))
     except requests.exceptions.ConnectionError:
         messages.warning(request, "Device is offline. Try again when it comes back online.")
@@ -174,24 +187,40 @@ def cancel_transaction(request,txn):
         messages.warning(request,f"The transaction with id { txn.id } is under progress. You can't cancel it. But you can stop it.")
     return HttpResponseRedirect(reverse('water_transaction_history'))
 
+def next_txn(product):
+    next_txns = WaterTransaction.objects.filter(plan__product_id=product.id,state=TxnState.in_queue).order_by('started_on')
+    if len(next_txns) > 0:
+        nxt_txn = next_txns.first()
+        nxt_txn.state = TxnState.running
+        nxt_txn.save()
+        return {"code":201,"req":float(nxt_txn.request), "txn":nxt_txn.id,"stop_key":nxt_txn.key} # , "wait":nxt_txn.wait,"dispensed":txn.dispensed,"txn":txn.id
+    return dict()
+
 # product side
 def store_sensor_values(request):#not currently if implementing, see in finsh_txn_func txn.dispensed == 0 which assumes this is not implemented 
     # txn_id, server_key, prod_id == txn.prod_id 
     return HttpResponse('hi')
 
 def finish_txn_func(g,**kwargs):
+    # print(g)
+    # if "txn" in g:
+    #     print(g["txn"])
+    # else:
+    #     print("txn not in g")
     if 'txn' in g and 'dispensed' in g:
         txn = get_object_or_404(WaterTransaction,id=g['txn'])
         #if txn.dispensed == 0 : #
-        txn.dispensed = int(g['dispensed'])
+        dispensed = Decimal(g['dispensed'])
+        error = dispensed - txn.request
+        if error < 0.05 and error > 0:
+            print(txn.request,dispensed)
+            dispensed = txn.request
+        txn.dispensed = dispensed
         txn.state = TxnState.finished
         txn.save()
-        next_txns = WaterTransaction.objects.filter(plan__product_id=txn.plan.product.id,state=TxnState.in_queue).order_by('started_on')
-        if len(next_txns) > 0:
-            nxt_txn = next_txns.first()
-            nxt_txn.state = TxnState.running
-            return {"code":201,"req":nxt_txn.request, "txn":nxt_txn.id,"stop_key":nxt_txn.key} # ,"dispensed":txn.dispensed,"txn":txn.id
-        return {"code":200}
+        response = {"code":200}
+        response.update(next_txn(txn.plan.product))
+        return response
  #       else:
 #            return {"code":1,"error":"dispensed was not 0"}
     return {"code":1,"error":"some data missing or unknown error"}
@@ -204,6 +233,7 @@ def cash(request):
 
 class WaterTransactionListView(LoginRequiredMixin, ListView):
     model = WaterTransaction
+    paginate_by = 10
     def get_queryset(self):
         return WaterTransaction.objects.filter(plan__user=self.request.user).order_by('-started_on')
 
@@ -255,10 +285,10 @@ class PlanActivateUpdateView(LoginRequiredMixin,UserPassesTestMixin, UpdateView)
 class PlanRequestsListView(LoginRequiredMixin,UserPassesTestMixin,ListView):
     model = Plan
     template_name = 'payments/plan_requested_list.html'
-
+    paginate_by = 10
     def get_queryset(self):
         product = get_object_or_404(Product,id=self.kwargs.get('product_id'))
-        return Plan.objects.filter(product=product)
+        return Plan.objects.filter(product=product).order_by('-id')
 
     def test_func(self):
         product = get_object_or_404(Product,id=self.kwargs.get('product_id'))
@@ -266,6 +296,7 @@ class PlanRequestsListView(LoginRequiredMixin,UserPassesTestMixin,ListView):
 
 class MyPlansListView(LoginRequiredMixin,ListView):
     model = Plan
+    paginate_by = 10
 
     def get_queryset(self):
         return Plan.objects.filter(user=self.request.user).order_by('-date')
@@ -298,6 +329,7 @@ class PostPaidListView(LoginRequiredMixin,UserPassesTestMixin, ListView):
     model = PostPaid
     fields = ['product','limit','bill']
     context_object_name = 'object'
+    paginate_by = 10
 
     def get_queryset(self):
         return PostPaid.objects.filter(user=self.request.user)

@@ -37,7 +37,7 @@ class ProductIPAddress(models.Model):
 
 class ServerKey(models.Model):
     product = models.OneToOneField(Product,on_delete=models.CASCADE)  # if attacker can see the messages, he can see previous key as well => No point in maintaing many keys
-    key = models.CharField(max_length=128,default="nithinSK")
+    key = models.CharField(max_length=128)
     time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -48,8 +48,8 @@ class ProductKey(models.Model):
     # Using key from last transactions can be difficult to handle (If Q is implemented, attacker can get the key and use later for another's txn).
     # Using private key for server and product may be good idea.
     product = models.OneToOneField(Product,on_delete=models.CASCADE)
-    key = models.CharField(max_length=128,default="nithinPK")
-    config_key = models.CharField(max_length=128, default="nithinCK")
+    key = models.CharField(max_length=128)
+    config_key = models.CharField(max_length=128)
     time = models.DateTimeField(auto_now=True)
 
     def __str__(self):

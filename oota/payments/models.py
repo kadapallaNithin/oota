@@ -34,10 +34,11 @@ class TxnState:
 
 class WaterTransaction(models.Model):
     plan = models.ForeignKey(Plan,on_delete=models.CASCADE)
-    dispensed = models.IntegerField(default=0)#in ml
-    request = models.IntegerField(default=0)#in ml
+    dispensed = models.DecimalField(default=0,  max_digits=8, decimal_places=2)#in liters
+    request = models.DecimalField(default=0, max_digits=8, decimal_places=2)#in liters
     key = models.CharField(max_length=128) # used to stop txn
     state = models.IntegerField(default=TxnState.requested)
+    #wait = models.IntegerField(default=10)
 #    cash_bytes = models.TextField(max_length=256)#seems as a complication
     started_on = models.DateTimeField(auto_now=True)
 

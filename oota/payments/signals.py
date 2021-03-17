@@ -9,6 +9,7 @@ def plan_used_update(sender,instance,**kwargs):
         # if old.not_finished:
             plan = Plan.objects.get(id=instance.plan.id)
             plan.used -= instance.request - instance.dispensed
+            # print(plan.used,instance.request,instance.dispensed)
             # instance.not_finished = False
             plan.save()
 

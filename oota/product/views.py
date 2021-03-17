@@ -3,13 +3,14 @@ from django.views.generic import CreateView, DetailView, ListView
 from django.db.models import Count
 from .models import Product, Rate, ProductIPAddress, ServerKey
 #from payments.models import Plan
+import payments.views as payments_views
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import User
 from django.http import HttpResponse, HttpResponseNotModified
 from django.http.response import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from webpush import send_user_notification
+# from webpush import send_user_notification
 from django.conf import settings
 
 from django.db import IntegrityError
@@ -188,8 +189,10 @@ def product_ip_func(g,**kwargs):
         product.productkey.key = new_key
         product.productkey.save()
         new_prod_ip = ProductIPAddress.objects.create(product_id=g['id'],ip=g['ip'])
-        #response['code'] = 200 #ok
-        return {"product_key":new_key }#,"password":"12345678","ssid":"kadapalla"}
+        response = {"product_key":new_key}#, "update_availabl":1,"password":"12345678","ssid":"kadapalla"}
+        if 'next' in g:
+            response.update(payments_views.next_txn(product))
+        return response
     return {"error":"IP is is not provided"}
 def product_ip(request):
     return secure_request(request,product_ip_func)

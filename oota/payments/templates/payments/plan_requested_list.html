@@ -1,5 +1,5 @@
-{% extends 'home/base.html' %}
-{% block content %}
+{% extends 'home/list.html' %}
+{% block list_content %}
 <div>
         <h4>Requested Plans</h4>
     {% if object_list %}
@@ -21,4 +21,4 @@
         This device don't have any requested plan.
     {% endif %}
 </div>
-{% endblock content %}
+{% endblock %}
